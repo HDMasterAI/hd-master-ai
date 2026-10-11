@@ -266,7 +266,7 @@ aiButton.addEventListener("click", async () => {
     const client = await Client.connect("Nick088/Real-ESRGAN_Pytorch");
 
     const result = await client.predict("/predict", {
-      img: await handle_file(file),
+     img: file,
       size_modifier: "4"
     });
 
