@@ -238,6 +238,69 @@ function updateVideo(){
     <button onclick="alert('Ultra plan payment will be available soon!')" style="padding:12px 25px;border:0;border-radius:8px;background:#7c5cff;color:white;">Choose Ultra</button>
   </div>
 </section>
-  
+  <script type="module">
+import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+
+const photoPanel = document.getElementById("photoPanel");
+const oldButton = document.getElementById("downloadPhoto");
+
+const aiButton = document.createElement("button");
+aiButton.className = "action";
+aiButton.textContent = "✨ Enhance Photo with Real AI";
+aiButton.style.background = "linear-gradient(90deg,#00c853,#087eaa)";
+oldButton.parentNode.insertBefore(aiButton, oldButton);
+
+aiButton.addEventListener("click", async () => {
+  const file = document.getElementById("photoInput").files[0];
+  const status = document.getElementById("photoStatus");
+
+  if (!file) {
+    status.textContent = "Please select a photo first.";
+    return;
+  }
+
+  aiButton.disabled = true;
+  status.textContent = "AI is enhancing your photo. Please wait...";
+
+  try {
+    const client = await Client.connect("Nick088/Real-ESRGAN_Pytorch");
+
+    const result = await client.predict("/predict", {
+      img: await handle_file(file),
+      size_modifier: "4"
+    });
+
+    const output = result.data[0];
+    const outputUrl = typeof output === "string"
+      ? (output.startsWith("http")
+          ? output
+          : "https://nick088-real-esrgan-pytorch.hf.space/file=" + output)
+      : output.url;
+
+    if (!outputUrl) throw new Error("AI output image was not found.");
+
+    const preview = document.getElementById("photoPreview");
+    preview.src = outputUrl;
+    preview.style.filter = "none";
+
+    const downloadButton = document.getElementById("downloadPhoto");
+    downloadButton.disabled = false;
+    downloadButton.onclick = () => {
+      const link = document.createElement("a");
+      link.href = outputUrl;
+      link.target = "_blank";
+      link.download = "HD-Master-AI-Enhanced.png";
+      link.click();
+    };
+
+    status.textContent = "AI enhancement complete! Your enhanced photo is ready.";
+  } catch (error) {
+    console.error(error);
+    status.textContent = "AI enhancement failed. Please try again. " + error.message;
+  } finally {
+    aiButton.disabled = false;
+  }
+});
+</script>
 </body>
 </html>
