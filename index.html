@@ -286,8 +286,21 @@ async function startVideoExport(){
   videoChunks = [];
   downloadArea.innerHTML = '';
   video.currentTime = 0;
-  videoExportStream = canvas.captureStream(25);
-  videoRecorder = new MediaRecorder(videoExportStream, {mimeType:mime});
+
+videoExportStream = canvas.captureStream(30);
+
+const audioStream = video.captureStream
+  ? video.captureStream()
+  : null;
+
+if(audioStream){
+  audioStream.getAudioTracks().forEach(track => {
+    videoExportStream.addTrack(track);
+  });
+}
+
+videoRecorder = new MediaRecorder(videoExportStream, {mimeType:mime});
+  
 
   videoRecorder.ondataavailable = e => {
     if(e.data.size) videoChunks.push(e.data);
