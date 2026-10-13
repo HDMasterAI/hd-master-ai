@@ -331,18 +331,30 @@ videoRecorder = new MediaRecorder(videoExportStream, {mimeType:mime});
     }
   }
 
-  videoRecorder.start();
+  videoRecorder.start(250);
   document.getElementById('exportVideoButton').disabled = true;
   document.getElementById('stopExportButton').disabled = false;
   status.textContent = 'Exporting... Keep this page open.';
 
-  try {
-    await video.play();
-    drawFrame();
-  } catch(e) {
-    status.textContent = 'Could not play video. Please try again.';
+  
+try {
+  await new Promise(resolve => {
+    if (video.readyState >= 2) {
+      resolve();
+    } else {
+      video.addEventListener('loadeddata', resolve, {once:true});
+    }
+  });
+
+  await video.play();
+  drawFrame();
+} catch(e) {
+  status.textContent = 'Could not play video. Please try again.';
+  if (videoRecorder && videoRecorder.state === 'recording') {
     videoRecorder.stop();
   }
+}
+
 
   video.onended = () => {
     if(videoRecorder && videoRecorder.state === 'recording'){
