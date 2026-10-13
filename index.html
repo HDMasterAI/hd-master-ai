@@ -323,13 +323,21 @@ videoRecorder = new MediaRecorder(videoExportStream, {mimeType:mime});
     document.getElementById('stopExportButton').disabled = true;
   };
 
-  function drawFrame(){
+
+  let lastFrameTime = 0;
+
+  function drawFrame(timestamp){
     if(videoRecorder && videoRecorder.state === 'recording'){
-      ctx.filter = getComputedStyle(video).filter || 'none';
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if(timestamp - lastFrameTime >= 40){
+        ctx.filter = getComputedStyle(video).filter || 'none';
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        lastFrameTime = timestamp;
+      }
+
       videoExportFrame = requestAnimationFrame(drawFrame);
     }
   }
+
 
   videoRecorder.start(250);
   document.getElementById('exportVideoButton').disabled = true;
