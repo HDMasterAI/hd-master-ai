@@ -106,32 +106,43 @@ footer{text-align:center;padding:24px;color:#91a4bd;font-size:13px}
     <div id="photoStatus" class="status" aria-live="polite"></div>
   </section>
 
-  <section class="card hidden" id="videoPanel">
-    <h2>Video Enhancement</h2>
-    <label class="upload" for="videoInput">
-      <div class="icon">🎞️</div>
-      <strong>Select Your Video</strong>
-      <p>Choose a video supported by your browser.</p>
-    </label>
-    <input id="videoInput" type="file" accept="video/*">
-    <div class="options">
-      <div class="option">
-        <label for="videoBrightness">Brightness</label>
-        <input id="videoBrightness" type="range" min="50" max="150" value="100" oninput="updateVideo()">
-      </div>
-      <div class="option">
-        <label for="videoContrast">Contrast</label>
-        <input id="videoContrast" type="range" min="50" max="180" value="110" oninput="updateVideo()">
-      </div>
-      <div class="option">
-        <label for="videoSaturation">Color</label>
-        <input id="videoSaturation" type="range" min="0" max="200" value="110" oninput="updateVideo()">
-      </div>
+<section class="card hidden" id="videoPanel">
+  <h2>🎬 Video Enhancement Studio</h2>  <label class="upload" for="videoInput">
+    <div class="icon">🎞️</div>
+    <strong>Select Your Video</strong>
+    <p>Choose a video from your phone.</p>
+  </label>
+  <input id="videoInput" type="file" accept="video/*">  <div class="options">
+    <div class="option">
+      <label for="videoBrightness">Brightness</label>
+      <input id="videoBrightness" type="range" min="50" max="150" value="100" oninput="updateVideo()">
     </div>
-    <div class="preview"><video id="videoPreview" class="hidden" controls playsinline></video></div>
-    <p class="note">You can preview the video with visual filters. This starter demo does not export an enhanced video file or provide AI video restoration.</p>
-    <div id="videoStatus" class="status" aria-live="polite"></div>
-  </section>
+    <div class="option">
+      <label for="videoContrast">Contrast</label>
+      <input id="videoContrast" type="range" min="50" max="180" value="110" oninput="updateVideo()">
+    </div>
+    <div class="option">
+      <label for="videoSaturation">Color</label>
+      <input id="videoSaturation" type="range" min="0" max="200" value="110" oninput="updateVideo()">
+    </div>
+    <div class="option">
+      <label for="videoEffect">Video Style</label>
+      <select id="videoEffect" onchange="updateVideo()">
+        <option value="natural">Natural</option>
+        <option value="cinematic">Cinematic</option>
+        <option value="vintage">1980s Vintage</option>
+        <option value="bw">Black & White</option>
+      </select>
+    </div>
+  </div>  <div class="preview">
+    <video id="videoPreview" class="hidden" controls playsinline></video>
+  </div>  <button class="action" id="exportVideoButton" onclick="startVideoExport()" disabled>
+    ✨ Apply Effect & Export Video
+  </button>  <button class="action" id="stopExportButton" onclick="stopVideoExport()" disabled>
+    Stop Export
+  </button>  <div id="videoStatus" class="status" aria-live="polite"></div>
+  <div id="videoDownload" class="preview"></div>  <p class="note">This browser-based version applies visual effects and exports video when supported. It is not genuine AI upscaling.</p>
+</section>
 
   <section class="card">
     <h2>🚀 About HD Master AI</h2>
@@ -195,6 +206,24 @@ function savePhoto(){
 document.getElementById('videoInput').addEventListener('change',function(){
   const file=this.files[0];
   if(!file)return;
+
+  if(videoUrl)URL.revokeObjectURL(videoUrl);
+  videoUrl=URL.createObjectURL(file);
+
+  const video=document.getElementById('videoPreview');
+  video.src=videoUrl;
+  video.classList.remove('hidden');
+
+  document.getElementById('videoStatus').textContent =
+    'Video loaded. Select an effect, then export your video.';
+
+  document.getElementById('exportVideoButton').disabled=false;
+  document.getElementById('videoDownload').innerHTML='';
+
+  updateVideo();
+});  ('change',function(){
+  const file=this.files[0];
+  if(!file)return;
   if(videoUrl)URL.revokeObjectURL(videoUrl);
   videoUrl=URL.createObjectURL(file);
   const video=document.getElementById('videoPreview');
@@ -205,9 +234,117 @@ document.getElementById('videoInput').addEventListener('change',function(){
 });
 
 function updateVideo(){
-  const video=document.getElementById('videoPreview');
-  video.style.filter='brightness('+document.getElementById('videoBrightness').value+'%) contrast('+document.getElementById('videoContrast').value+'%) saturate('+document.getElementById('videoSaturation').value+'%)';
+  const video = document.getElementById('videoPreview');
+  const brightness = document.getElementById('videoBrightness').value;
+  const contrast = document.getElementById('videoContrast').value;
+  const saturation = document.getElementById('videoSaturation').value;
+  const effect = document.getElementById('videoEffect').value;
+
+  let filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+
+  if(effect === 'cinematic'){
+    filter += ' sepia(15%)';
+  } else if(effect === 'vintage'){
+    filter += ' sepia(45%)';
+  } else if(effect === 'bw'){
+    filter += ' grayscale(100%)';
+  }
+
+  video.style.filter = filter;
 }
+  let videoRecorder = null;
+let videoChunks = [];
+let videoExportStream = null;
+let videoExportFrame = null;
+  
+async function startVideoExport(){
+  const video = document.getElementById('videoPreview');
+  const status = document.getElementById('videoStatus');
+  const downloadArea = document.getElementById('videoDownload');
+
+  if(!video.src || !video.videoWidth){
+    status.textContent = 'Please upload a video first.';
+    return;
+  }
+
+  if(!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream){
+    status.textContent = 'Video export is not supported by this browser.';
+    return;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+
+  const mime = 'video/webm';
+  if(!MediaRecorder.isTypeSupported(mime)){
+    status.textContent = 'WebM export is not supported.';
+    return;
+  }
+
+  videoChunks = [];
+  downloadArea.innerHTML = '';
+  video.currentTime = 0;
+  videoExportStream = canvas.captureStream(25);
+  videoRecorder = new MediaRecorder(videoExportStream, {mimeType:mime});
+
+  videoRecorder.ondataavailable = e => {
+    if(e.data.size) videoChunks.push(e.data);
+  };
+
+  videoRecorder.onstop = () => {
+    cancelAnimationFrame(videoExportFrame);
+    videoExportStream.getTracks().forEach(t => t.stop());
+
+    const blob = new Blob(videoChunks, {type:mime});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'hd-master-ai-video.webm';
+    link.textContent = 'Download Enhanced Video';
+    downloadArea.appendChild(link);
+
+    status.textContent = 'Export finished. Download your video.';
+    document.getElementById('exportVideoButton').disabled = false;
+    document.getElementById('stopExportButton').disabled = true;
+  };
+
+  function drawFrame(){
+    if(videoRecorder && videoRecorder.state === 'recording'){
+      ctx.filter = getComputedStyle(video).filter || 'none';
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      videoExportFrame = requestAnimationFrame(drawFrame);
+    }
+  }
+
+  videoRecorder.start();
+  document.getElementById('exportVideoButton').disabled = true;
+  document.getElementById('stopExportButton').disabled = false;
+  status.textContent = 'Exporting... Keep this page open.';
+
+  try {
+    await video.play();
+    drawFrame();
+  } catch(e) {
+    status.textContent = 'Could not play video. Please try again.';
+    videoRecorder.stop();
+  }
+
+  video.onended = () => {
+    if(videoRecorder && videoRecorder.state === 'recording'){
+      videoRecorder.stop();
+    }
+  };
+}
+
+function stopVideoExport(){
+  if(videoRecorder && videoRecorder.state === 'recording'){
+    videoRecorder.stop();
+    document.getElementById('videoPreview').pause();
+  }
+}
+
 </script>
   <!-- HD Master AI Video Premium Plans -->
 
