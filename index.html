@@ -314,16 +314,15 @@ videoRecorder = new MediaRecorder(videoExportStream, {mimeType:mime});
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'hd-master-ai-video.webm';
-    link.textContent = 'Download Enhanced Video';
-    downloadArea.appendChild(link);
-
-    status.textContent = 'Export finished. Download your video.';
-    document.getElementById('exportVideoButton').disabled = false;
-    document.getElementById('stopExportButton').disabled = true;
-  };
-
-
+    link.download = 'HD-Master-AI-Video.webm';
+link.target = '_blank';
+link.textContent = 'Download Enhanced Video';
+  
+downloadArea.appendChild(link);
+    link.click();
+status.textContent = 'Export finished. Download your video.';
+document.getElementById('exportVideoButton').disabled = false;
+document.getElementById('stopExportButton').disabled = true;
   let lastFrameTime = 0;
 
   function drawFrame(timestamp){
