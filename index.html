@@ -349,7 +349,7 @@ videoRecorder.onstop = () => {
   }
 
 
-  videoRecorder.start(250);
+videoRecorder.start();
   document.getElementById('exportVideoButton').disabled = true;
   document.getElementById('stopExportButton').disabled = false;
   status.textContent = 'Exporting... Keep this page open.';
