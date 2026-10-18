@@ -279,62 +279,64 @@ async function startVideoExport(){
 
 videoExportStream = canvas.captureStream(30);
 
-const audioStream = video.captureStream
-  ? video.captureStream()
-  : null;
+  const audioStream = video.captureStream
+    ? video.captureStream()
+    : null;
 
-if(audioStream){
-  audioStream.getAudioTracks().forEach(track => {
-    videoExportStream.addTrack(track);
+  if (audioStream) {
+    audioStream.getAudioTracks().forEach(track => {
+      videoExportStream.addTrack(track);
+    });
+  }
+
+  videoRecorder = new MediaRecorder(videoExportStream, {
+    mimeType: mime
   });
-}
-
-videoRecorder = new MediaRecorder(videoExportStream, {mimeType:mime});
-  
 
   videoRecorder.ondataavailable = e => {
-    if(e.data.size) videoChunks.push(e.data);
+    if (e.data && e.data.size > 0) {
+      videoChunks.push(e.data);
+    }
   };
-videoRecorder.onstop = () => {
-  cancelAnimationFrame(videoExportFrame);
 
-  if (videoExportStream) {
-    videoExportStream.getTracks().forEach(track => track.stop());
-  }
+  videoRecorder.onstop = () => {
+    cancelAnimationFrame(videoExportFrame);
 
-  document.getElementById('exportVideoButton').disabled = false;
-  document.getElementById('stopExportButton').disabled = true;
+    if (videoExportStream) {
+      videoExportStream.getTracks().forEach(track => track.stop());
+    }
 
-  if (!videoChunks.length) {
-    status.textContent = 'Export failed: no video data recorded. Please try again.';
-    return;
-  }
+    document.getElementById('exportVideoButton').disabled = false;
+    document.getElementById('stopExportButton').disabled = true;
 
-  const blob = new Blob(videoChunks, { type: mime });
+    if (!videoChunks.length) {
+      status.textContent = 'Export failed: no video data recorded. Please try again.';
+      return;
+    }
 
-  if (!blob.size) {
-    status.textContent = 'Export failed: empty video file.';
-    return;
-  }
+    const blob = new Blob(videoChunks, { type: mime });
+    if (!blob.size) {
+      status.textContent = 'Export failed: empty video file.';
+      return;
+    }
 
-  const url = URL.createObjectURL(blob);
-  downloadArea.innerHTML = '';
+    const url = URL.createObjectURL(blob);
+    downloadArea.innerHTML = '';
 
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'HD-Master-AI-Video.webm';
-  link.textContent = 'Tap here to download your video';
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'HD-Master-AI-Video.webm';
+    link.textContent = 'Tap here to download your video';
+    link.style.display = 'inline-block';
+    link.style.padding = '12px 18px';
+    link.style.margin = '10px';
+    link.style.background = '#087eaa';
+    link.style.color = 'white';
+    link.style.borderRadius = '8px';
 
-  link.style.display = 'inline-block';
-  link.style.padding = '12px 18px';
-  link.style.margin = '10px';
-  link.style.background = '#087eaa';
-  link.style.color = 'white';
-  link.style.borderRadius = '8px';
-
-  downloadArea.appendChild(link);
-  status.textContent = 'Export finished. Tap the download link below.';
-};
+    downloadArea.appendChild(link);
+    status.textContent = 'Export finished. Tap the download link below.';
+  };
   let lastFrameTime = 0;
   function drawFrame(timestamp){
     if(videoRecorder && videoRecorder.state === 'recording'){
