@@ -247,17 +247,20 @@ let videoChunks = [];
 let videoExportStream = null;
 let videoExportFrame = null;
   
-async function startVideoExport(){
+  async function startVideoExport() {
   const video = document.getElementById('videoPreview');
   const status = document.getElementById('videoStatus');
   const downloadArea = document.getElementById('videoDownload');
+  const exportBtn = document.getElementById('exportVideoButton');
+  const stopBtn = document.getElementById('stopExportButton');
 
-  if(!video.src || !video.videoWidth){
+  if (!video.src || !video.videoWidth) {
     status.textContent = 'Please upload a video first.';
     return;
   }
 
-  if(!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream){
+  if (!window.MediaRecorder ||
+      !HTMLCanvasElement.prototype.captureStream) {
     status.textContent = 'Video export is not supported by this browser.';
     return;
   }
@@ -267,120 +270,138 @@ async function startVideoExport(){
   canvas.height = video.videoHeight;
   const ctx = canvas.getContext('2d');
 
-  const mime = 'video/webm';
-  if(!MediaRecorder.isTypeSupported(mime)){
-    status.textContent = 'WebM export is not supported.';
+  const mimeTypes = [
+    'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp8',
+    'video/webm'
+  ];
+  const mime = mimeTypes.find(type =>
+    MediaRecorder.isTypeSupported(type)
+  );
+
+  if (!mime) {
+    status.textContent = 'WebM export is not supported on this device.';
     return;
   }
 
   videoChunks = [];
   downloadArea.innerHTML = '';
+  video.pause();
   video.currentTime = 0;
 
-videoExportStream = canvas.captureStream(30);
-
-  const audioStream = video.captureStream
-    ? video.captureStream()
-    : null;
-
-  if (audioStream) {
-    audioStream.getAudioTracks().forEach(track => {
-      videoExportStream.addTrack(track);
+  try {
+    await new Promise(resolve => {
+      if (video.readyState >= 2) resolve();
+      else video.addEventListener('loadeddata', resolve, { once: true });
     });
-  }
 
-  videoRecorder = new MediaRecorder(videoExportStream, {
-    mimeType: mime
-  });
+    videoExportStream = canvas.captureStream(25);
 
-  videoRecorder.ondataavailable = e => {
-    if (e.data && e.data.size > 0) {
-      videoChunks.push(e.data);
-    }
-  };
-
-  videoRecorder.onstop = () => {
-    cancelAnimationFrame(videoExportFrame);
-
-    if (videoExportStream) {
-      videoExportStream.getTracks().forEach(track => track.stop());
+    try {
+      if (video.captureStream) {
+        const audioStream = video.captureStream();
+        audioStream.getAudioTracks().forEach(track => {
+          videoExportStream.addTrack(track);
+        });
+      }
+    } catch (audioError) {
+      // Continue without audio if browser blocks audio capture.
     }
 
-    document.getElementById('exportVideoButton').disabled = false;
-    document.getElementById('stopExportButton').disabled = true;
+    videoRecorder = new MediaRecorder(videoExportStream, {
+      mimeType: mime
+    });
 
-    if (!videoChunks.length) {
-      status.textContent = 'Export failed: no video data recorded. Please try again.';
-      return;
-    }
+    videoRecorder.ondataavailable = event => {
+      if (event.data && event.data.size > 0) {
+        videoChunks.push(event.data);
+      }
+    };
 
-    const blob = new Blob(videoChunks, { type: mime });
-    if (!blob.size) {
-      status.textContent = 'Export failed: empty video file.';
-      return;
-    }
+    videoRecorder.onerror = () => {
+      status.textContent = 'Recording error. Please try another video.';
+    };
 
-    const url = URL.createObjectURL(blob);
-    downloadArea.innerHTML = '';
+    videoRecorder.onstop = () => {
+      cancelAnimationFrame(videoExportFrame);
 
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'HD-Master-AI-Video.webm';
-    link.textContent = 'Tap here to download your video';
-    link.style.display = 'inline-block';
-    link.style.padding = '12px 18px';
-    link.style.margin = '10px';
-    link.style.background = '#087eaa';
-    link.style.color = 'white';
-    link.style.borderRadius = '8px';
+      if (videoExportStream) {
+        videoExportStream.getTracks().forEach(track => track.stop());
+        videoExportStream = null;
+      }
 
-    downloadArea.appendChild(link);
-    status.textContent = 'Export finished. Tap the download link below.';
-  };
-  let lastFrameTime = 0;
-  function drawFrame(timestamp){
-    if(videoRecorder && videoRecorder.state === 'recording'){
-      if(timestamp - lastFrameTime >= 40){
+      video.pause();
+      exportBtn.disabled = false;
+      stopBtn.disabled = true;
+
+      if (!videoChunks.length) {
+        status.textContent = 'Export failed: no video data recorded.';
+        return;
+      }
+
+      const blob = new Blob(videoChunks, { type: mime });
+
+      if (blob.size < 1000) {
+        status.textContent =
+          'Export failed: video file is too small. Please try again.';
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'HD-Master-AI-Video.webm';
+      link.textContent = 'Tap here to download your video';
+      link.style.cssText =
+        'display:inline-block;padding:12px;color:#fff;background:#087fbb;border-radius:8px;margin-top:12px;';
+
+      downloadArea.innerHTML = '';
+      downloadArea.appendChild(link);
+      status.textContent =
+        'Export finished. Tap the download link below.';
+    };
+
+    let lastFrameTime = 0;
+
+    function drawFrame(timestamp) {
+      if (!videoRecorder ||
+          videoRecorder.state !== 'recording') return;
+
+      if (timestamp - lastFrameTime >= 30) {
         ctx.filter = getComputedStyle(video).filter || 'none';
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         lastFrameTime = timestamp;
-      } 
+      }
 
       videoExportFrame = requestAnimationFrame(drawFrame);
     }
-  }
 
+    videoRecorder.start(1000);
+    exportBtn.disabled = true;
+    stopBtn.disabled = false;
+    status.textContent = 'Exporting... Keep this page open.';
 
-videoRecorder.start();
-  document.getElementById('exportVideoButton').disabled = true;
-  document.getElementById('stopExportButton').disabled = false;
-  status.textContent = 'Exporting... Keep this page open.';
+    videoExportFrame = requestAnimationFrame(drawFrame);
+    await video.play();
 
-  
-try {
-  await new Promise(resolve => {
-    if (video.readyState >= 2) {
-      resolve();
-    } else {
-      video.addEventListener('loadeddata', resolve, {once:true});
-    }
-  });
+    video.onended = () => {
+      if (videoRecorder &&
+          videoRecorder.state === 'recording') {
+        videoRecorder.stop();
+      }
+    };
 
-  await video.play();
-  drawFrame();
-} catch(e) {
-  status.textContent = 'Could not play video. Please try again.';
-  if (videoRecorder && videoRecorder.state === 'recording') {
-    videoRecorder.stop();
-  }
-}
+  } catch (error) {
+    status.textContent = 'Could not export video. Please try again.';
 
-
-  video.onended = () => {
-    if(videoRecorder && videoRecorder.state === 'recording'){
+    if (videoRecorder &&
+        videoRecorder.state === 'recording') {
       videoRecorder.stop();
+    } else {
+      exportBtn.disabled = false;
+      stopBtn.disabled = true;
     }
-  };
+  }
 }
 
 function stopVideoExport(){
